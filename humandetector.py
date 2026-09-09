@@ -1,7 +1,9 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import csv
 from pathlib import Path
+from datetime import date
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -9,6 +11,7 @@ SCRIPT_DIR = Path(__file__).parent
 VIDEO_SOURCE = SCRIPT_DIR / "test_video.mp4"  # file path, 0 for webcam, or "rtsp://..." for CCTV
 LINE_START   = (600,  540)        # left end of door threshold line  (x, y)
 LINE_END     = (1440, 540)        # right end of door threshold line (x, y)
+LOG_PATH     = SCRIPT_DIR / "foot_traffic_log.csv"  # date,count — read by generate_report.py
 # Crossing convention (for a horizontal line):
 #   person moves from ABOVE the line (smaller y) → BELOW (larger y)  = OUT
 #   person moves from BELOW the line             → ABOVE              = IN
@@ -72,6 +75,28 @@ def process_frame(frame: np.ndarray, results) -> np.ndarray:
     return frame
 
 
+def log_count(count: int, log_path: Path = LOG_PATH, day: date | None = None) -> None:
+    """Record today's foot traffic count, updating the row if today was already logged."""
+    day = day or date.today()
+    rows: dict[str, str] = {}
+
+    if log_path.exists():
+        with open(log_path, newline="") as f:
+            reader = csv.reader(f)
+            next(reader, None)  # skip header
+            for row in reader:
+                if row:
+                    rows[row[0]] = row[1]
+
+    rows[day.isoformat()] = str(count)
+
+    with open(log_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["date", "count"])
+        for d in sorted(rows):
+            writer.writerow([d, rows[d]])
+
+
 def main():
     model = YOLO(MODEL_PATH)
     cap   = cv2.VideoCapture(str(VIDEO_SOURCE))
@@ -96,6 +121,9 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     print(f"\nFoot traffic count: {count_in}")
+
+    log_count(count_in)
+    print(f"Logged to {LOG_PATH.name}")
 
 
 if __name__ == "__main__":

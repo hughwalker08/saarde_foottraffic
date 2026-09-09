@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Generated reports (regenerate locally instead of tracking)
+*.pdf
